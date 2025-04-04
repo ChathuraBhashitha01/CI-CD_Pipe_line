@@ -7,11 +7,11 @@ phases:
   build:
     commands:
       - docker build -t ijse/ai .
-      - docker tag ijse/ai:latest 505076619770.dkr.ecr.us-east-1.amazonaws.com/ijse/ai:latest
+      - docker tag ijse/ai:latest 505076619770.dkr.ecr.us-east-1.amazonaws.com/bank-marketing-model:latest
   post_build:
     commands:
       - docker push 505076619770.dkr.ecr.ap-south-1.amazonaws.com/ai:latest
       - echo Writing image definitions file...
-      - printf '[{"name":"ai","imageUri":"%s"}]' 505076619770.dkr.ecr.ap-south-1.amazonaws.com/ai:latest > imagedefinitions.json   
+      - printf '[{"name":"bank-marketing-model","imageUri":"%s"}]' 505076619770.dkr.ecr.ap-south-1.amazonaws.com/bank-marketing-model:latest > imagedefinitions.json
 artifacts:
   files: imagedefinitions.json

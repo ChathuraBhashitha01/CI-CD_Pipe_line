@@ -1,75 +1,118 @@
+# pip install Flask
+
+# python --version
+
 from flask import Flask, request, jsonify, render_template
+import pandas as pd
 import joblib
+from sklearn.preprocessing import StandardScaler
 import numpy as np
-from sklearn.preprocessing import LabelEncoder
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)
 
-# Load the trained model
-model = joblib.load('bank-marketing.joblib')
+svm_model = joblib.load("svm_model.pkl")
+scaler = joblib.load("scaler.pkl")
 
-# Define expected fields
-EXPECTED_FIELDS = [
-    "age", "job", "marital", "education", "default", "balance",
-    "housing", "loan", "contact", "day", "month", "duration",
-    "campaign", "pdays", "previous", "poutcome"
-]
-
-# Categorical features that need encoding
-CATEGORICAL_FEATURES = [
-    "job", "marital", "education", "default", "housing",
-    "loan", "contact", "month", "poutcome"
+training_features = [
+    'age', 'job',
+    'marital', 'education', 'default', 'housing', 'loan', 'contact', 'day_of_week', 'month',
+    'duration', 'campaign', 'pdays', 'previous', 'poutcome',
+    'emp.var.rate', 'cons.price.idx', 'cons.conf.idx', 'euribor3m', 'nr.employed'
 ]
 
 
-@app.route('/')
-def index():
-    return render_template("frontend.html")
+@app.route('/', methods=['GET'])
+def home():
+    return render_template('index.html')
 
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    try:
-        input_data = request.get_json()  # ✅ CORRECT for JSON body
+    if request.method == 'POST':
+        data = request.get_json()
 
-        # Ensure all expected fields are present
-        missing_fields = [field for field in EXPECTED_FIELDS if field not in input_data]
-        if missing_fields:
-            return jsonify({'error': f'Missing fields: {", ".join(missing_fields)}'}), 400
+        age = data.get('age')
+        job = data.get('job')
+        marital = data.get('marital')
+        education = data.get('education')
+        default = data.get('default')
+        housing = data.get('housing')
+        loan = data.get('loan')
 
-        # Dynamically create label encoders and encode categorical features
-        label_encoders = {}
-        for col in CATEGORICAL_FEATURES:
-            if col in input_data:
-                value = input_data[col]
-                if value is not None:
-                    # Initialize label encoder for each field dynamically
-                    le = LabelEncoder()
-                    input_data[col] = le.fit_transform([value])[0]  # Fit and transform the value
-                    label_encoders[col] = le
-                else:
-                    return jsonify({'error': f'No value for categorical field: {col}'}), 400
+        duration = 563.6641774157049  # apply mean duration
+        campaign = 1  # Number of contacts for the client during this campaign
+        pdays = 999  # No previous contact
+        previous = 0  # First contact
+        poutcome = 'nonexistent'  # No previous outcome
+        emp_var_rate = 1.4  # Default placeholder for economic data
+        cons_price_idx = 93.918  # Default placeholder for economic data
+        cons_conf_idx = -42.7  # Default placeholder for economic data
+        euribor3m = 4.961  # Default placeholder for economic data
+        nr_employed = 5228.1  # Default placeholder for economic data
 
-        # Convert numerical features to float
-        for field in input_data:
-            if field not in CATEGORICAL_FEATURES:
-                value = input_data[field]
-                if value is not None:
-                    input_data[field] = float(value)
-                else:
-                    return jsonify({'error': f'No value for numerical field: {field}'}), 400
+        input_data = {
+            'age': [int(age)] if age is not None else [0],
+            'job': [job],
+            'marital': [marital],
+            'education': [education],
+            'default': [default],
+            'housing': [housing],
+            'loan': [loan],
+            'duration': [duration],
+            'campaign': [campaign],
+            'pdays': [pdays],
+            'previous': [previous],
+            'poutcome': [poutcome],
+            'emp.var.rate': [emp_var_rate],
+            'cons.price.idx': [cons_price_idx],
+            'cons.conf.idx': [cons_conf_idx],
+            'euribor3m': [euribor3m],
+            'nr.employed': [nr_employed],
+            'contact': [0],
+            'month': [6],
+            'day_of_week': [1]
+        }
 
-        # Convert to NumPy array for prediction
-        features = np.array([list(input_data.values())])
+        # Create DataFrame for the input sample
+        df_input = pd.DataFrame(input_data)
 
-        # Make prediction
-        prediction = model.predict(features)
+        # List of columns to encode, ensure to exclude the columns that the user doesn't provide
+        columns_to_encode = ['job', 'marital', 'education', 'default', 'housing', 'loan', 'poutcome']
 
-        return jsonify({'prediction': prediction.tolist()})
+        # Apply One-Hot Encoding only to the available columns
+        df_input_encoded = pd.get_dummies(df_input, columns=columns_to_encode, prefix='', prefix_sep='')
 
-    except Exception as e:
-        return jsonify({'error': str(e)}), 400
+        # Remove duplicate columns (if any)
+        df_input_encoded = df_input_encoded.loc[:, ~df_input_encoded.columns.duplicated()]
+
+        # Ensure all training features exist in input data (set missing ones to 0)
+        df_input_encoded = df_input_encoded.reindex(columns=training_features, fill_value=0)
+
+        # Ensure the column order matches the scaler's features exactly
+        df_input_encoded = df_input_encoded[scaler.feature_names_in_]
+
+        # Convert the data type to float64 to match the scaler's expectations
+        df_input_encoded = df_input_encoded.astype(np.float64)
+
+        # Apply the same scaling as the training data
+        df_input_scaled = scaler.transform(df_input_encoded)
+
+        # Make prediction using the saved SVM model
+        prediction = svm_model.predict(df_input_scaled)
+
+        # Convert prediction to 'yes' or 'no'
+        predicted_subscription = 'yes' if prediction[0] == 1 else 'no'
+
+        # Return the result as JSON
+        return jsonify({'result': predicted_subscription})
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=80) # to change the port .
+    # app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(host="0.0.0.0", port=80)  # to change the port .
+
+# make docker file
+# docker build -t class3 .
+# docker run -p 5000:5000 class3

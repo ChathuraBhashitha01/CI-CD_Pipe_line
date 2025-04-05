@@ -3,15 +3,15 @@ version: 0.2
 phases:
   pre_build:
     commands:
-      - aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 505076619770.dkr.ecr.us-east-1.amazonaws.com
+      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 376129879284.dkr.ecr.ap-south-1.amazonaws.com
   build:
     commands:
-      - docker build -t ijse/ai .
-      - docker tag ijse/ai:latest 505076619770.dkr.ecr.us-east-1.amazonaws.com/bank-marketing-model:latest
+      - docker build -t ai2 .
+      - docker tag ai2:latest 376129879284.dkr.ecr.ap-south-1.amazonaws.com/ai2:latest
   post_build:
     commands:
-      - docker push 505076619770.dkr.ecr.ap-south-1.amazonaws.com/ai:latest
+      - docker push 376129879284.dkr.ecr.ap-south-1.amazonaws.com/ai2:latest
       - echo Writing image definitions file...
-      - printf '[{"name":"bank-marketing-model","imageUri":"%s"}]' 505076619770.dkr.ecr.ap-south-1.amazonaws.com/bank-marketing-model:latest > imagedefinitions.json
+      - printf '[{"name":"ai2","imageUri":"%s"}]' 376129879284.dkr.ecr.us-east-1.amazonaws.com/ai2:latest > imagedefinitions.json
 artifacts:
   files: imagedefinitions.json
